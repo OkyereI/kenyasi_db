@@ -409,7 +409,7 @@ def create_tables_and_initial_user():
         db.create_all()
 
         if not db.session.query(User).filter_by(username='admin').first():
-            admin_user = User(username='admin')
+            admin_user = User(username='executive')
             admin_user.set_password('KSYA2025')
             db.session.add(admin_user)
             db.session.commit()

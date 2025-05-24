@@ -4,14 +4,13 @@ import os
 import random
 import string
 import requests
-from datetime import datetime, date # Import 'date' as well
+from datetime import datetime, date 
 
 from flask import Flask, redirect, url_for, flash, request, render_template, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_wtf import FlaskForm
-# Import DateField here
 from wtforms import StringField, SelectField, TextAreaField, IntegerField, BooleanField, SubmitField, PasswordField, DateField 
 from wtforms.validators import DataRequired, Length, Optional, Regexp, Email, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,7 +23,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # Ensure necessary folders exist
 instance_path = os.path.join(basedir, 'instance')
 os.makedirs(instance_path, exist_ok=True)
-os.makedirs(os.path.join(basedir, 'templates', 'admin'), exist_ok=True) # Ensure this path is correct
+os.makedirs(os.path.join(basedir, 'templates', 'admin'), exist_ok=True) 
 
 # Initialize Flask app
 app = Flask(__name__, instance_relative_config=True)
@@ -65,7 +64,7 @@ class CommunityMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
-    date_of_birth = db.Column(db.Date, nullable=False) # Stored as a Date object
+    date_of_birth = db.Column(db.Date, nullable=False) 
     gender = db.Column(db.String(10), nullable=False)
     contact_number = db.Column(db.String(20), nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=True)
@@ -94,47 +93,35 @@ def generate_verification_code(area_code: str) -> str:
     random_suffix = ''.join(random.choice(characters) for _ in range(remaining_length))
     return f"{base_string}{random_suffix}"
 
-# --- SMS Sending Function (Corrected with GET and debug print) ---
-# app.py (locate this function and replace it)
-
-# --- SMS Sending Function (Modified to capture Arkesel's detailed error) ---
+# --- SMS Sending Function ---
 def send_sms(recipient: str, message: str, prepend_code: bool = False, verification_code: str = "") -> bool:
-    print("DEBUG: Entering send_sms function. Using GET request logic.") # Debug print
+    print("DEBUG: Entering send_sms function. Using GET request logic.") 
 
     api_key = app.config['ARKESEL_API_KEY']
     sender_id = app.config['ARKESEL_SENDER_ID']
     # url = "https://sms.arkesel.com/sms/api"
-    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessage"
-
+    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessages"
     # Robust phone number formatting to ensure +233 format
-    if recipient: # Ensure recipient is not empty or None
-        recipient = recipient.strip() # Remove any leading/trailing whitespace
-        
-        # Remove any existing '+' to handle it consistently
+    if recipient: 
+        recipient = recipient.strip() 
         if recipient.startswith('+'):
             recipient = recipient.lstrip('+') 
-        
-        # If it starts with '0', remove '0' and prepend '233'
         if recipient.startswith('0'):
             recipient = '233' + recipient[1:] 
-        # If it doesn't start with '233' (e.g., 24xxxxxxx), prepend '233'
         elif not recipient.startswith('233'):
             recipient = '233' + recipient
-        
-        # Now, ensure the final number has the '+' prefix for Arkesel's preference
         recipient = '+' + recipient
     else:
         app.logger.warning("Attempted to send SMS to an empty recipient number.")
-        return False # Cannot send if recipient number is empty
+        return False 
 
     final_message = f"{verification_code} {message}" if prepend_code else message 
     
-    # Payload for Arkesel GET API
     payload = {
-        "action": "send-sms",      # Explicit action for Arkesel
+        "action": "send-sms",      
         "api_key": api_key,
-        "to": recipient,           # Recipient key for GET API
-        "from": sender_id,         # Sender ID key for GET API
+        "to": recipient,           
+        "from": sender_id,         
         "message": final_message
     }
 
@@ -142,8 +129,7 @@ def send_sms(recipient: str, message: str, prepend_code: bool = False, verificat
         app.logger.info(f"Attempting to send SMS to {recipient} with message: '{final_message}' using GET request.")
         response = requests.get(url, params=payload) 
         
-        # --- NEW DEBUGGING: Log Arkesel's exact response content if not success ---
-        if not response.ok: # If status code is not 2xx (successful)
+        if not response.ok: 
             app.logger.error(f"Arkesel API returned non-success status {response.status_code}.")
             app.logger.error(f"Arkesel Raw Response Text: {response.text}")
             try:
@@ -151,25 +137,21 @@ def send_sms(recipient: str, message: str, prepend_code: bool = False, verificat
                 app.logger.error(f"Arkesel Parsed Error JSON: {error_data}")
             except requests.exceptions.JSONDecodeError:
                 app.logger.error("Arkesel response could not be parsed as JSON.")
-            # Do NOT raise_for_status here if we want to handle it below based on response.json()
-            # We'll just return False after logging the detailed error
-            return False # Immediately return False if HTTP status indicates failure
+            return False 
 
-        # If response.ok (status code 2xx), proceed to parse JSON
         response_data = response.json()
         if response_data.get('status') == 'success':
             app.logger.info(f"SMS sent successfully to {recipient}. Arkesel response: {response_data}")
             return True
         else:
-            # This handles cases where Arkesel returns 200 OK but status is 'failed' in JSON
             app.logger.error(f"Failed to send SMS to {recipient}. Arkesel JSON status not 'success': {response_data}")
             return False
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error sending SMS to {recipient}: {e}")
         return False
+
 # --- Flask-Admin Customization ---
 
-# Custom Admin Index View to display statistics
 class MyAdminIndexView(AdminIndexView):
     @expose('/')
     @login_required
@@ -203,14 +185,11 @@ class MyAdminIndexView(AdminIndexView):
             'gender': gender_dict,
             'area_code': area_code_dict,
         }
-        # Flask-Admin's index view automatically gets admin context
         return self.render('admin/index.html', stats=stats)
 
-# Custom WTForms for CommunityMember
 class CommunityMemberForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=100)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=100)])
-    # CHANGED: Use DateField for date_of_birth
     date_of_birth = DateField('Date of Birth (YYYY-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
     gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')], validators=[DataRequired()])
     contact_number = StringField('Contact Number', validators=[Optional(), Length(max=20)])
@@ -228,14 +207,11 @@ class CommunityMemberForm(FlaskForm):
     area_code = StringField('Area Code', validators=[DataRequired(), Length(min=1, max=10, message="Area Code is required and should be max 10 characters")])
     submit = SubmitField('Submit')
 
-# Form for Send All Messages
 class SendAllMessagesForm(FlaskForm):
     message = TextAreaField('Message to All Members', validators=[DataRequired(), Length(min=10, max=1600)],
                             render_kw={"placeholder": "Your message here. Verification code will be prepended automatically."})
     submit = SubmitField('Send Message to All')
 
-
-# Custom ModelView for CommunityMember with SMS and Print Actions
 class CommunityMemberView(ModelView):
     def is_accessible(self):
         return current_user.is_authenticated
@@ -292,7 +268,6 @@ class CommunityMemberView(ModelView):
             app.logger.error(f"Error updating community member: {ex}")
             return False
 
-    # --- Exposed Method for Individual SMS Sending ---
     @expose('/send-sms/<int:member_id>', methods=['GET', 'POST'])
     @login_required
     def send_sms_view(self, member_id):
@@ -319,7 +294,6 @@ class CommunityMemberView(ModelView):
 
         return self.render('admin/send_sms_form.html', member=member, message_text="")
 
-    # --- Exposed Method for Send All Messages ---
     @expose('/send-all-sms/', methods=['GET', 'POST'])
     @login_required
     def send_all_sms_view(self):
@@ -360,7 +334,7 @@ class LoginForm(FlaskForm):
     remember_me = BooleanField('Remember Me')
     submit = SubmitField('Login')
 
-# --- Routes (Original Flask routes remain, but SMS functions are now within ModelView) ---
+# --- Routes ---
 @app.route('/')
 def index():
     return redirect(url_for('login'))
@@ -390,7 +364,6 @@ def logout():
     return redirect(url_for('login'))
 
 
-# --- Print Member Information Route (Remains a standalone Flask route as its template doesn't extend admin_base_template) ---
 @app.route('/print_member/<int:member_id>')
 @login_required
 def print_member_info(member_id):
@@ -402,20 +375,21 @@ def print_member_info(member_id):
     return render_template('admin/print_member.html', member=member, print_on_load=True)
 
 
-# --- Database Initialization (Run once and create initial admin user) ---
-@app.before_request
-def create_tables_and_initial_user():
-    with app.app_context():
-        db.create_all()
+# --- DATABASE INITIALIZATION FOR GUNICORN/PRODUCTION ---
+# This block ensures tables are created and the initial admin user is set up
+# when the 'app' object is created/imported by Gunicorn.
+with app.app_context():
+    db.create_all()
 
-        if not db.session.query(User).filter_by(username='admin').first():
-            admin_user = User(username='admin')
-            admin_user.set_password('KSYA2025')
-            db.session.add(admin_user)
-            db.session.commit()
-            app.logger.info("Initial admin user 'admin' created with password 'KSYA2025'")
-            print("Initial admin user 'admin' created with password 'KSYA2025'")
+    if not db.session.query(User).filter_by(username='admin').first():
+        admin_user = User(username='admin')
+        admin_user.set_password('KSYA2025') # Default password for admin
+        db.session.add(admin_user)
+        db.session.commit()
+        app.logger.info("Initial admin user 'admin' created with password 'KSYA2025'")
+        print("Initial admin user 'admin' created with password 'KSYA2025'")
 
 
 if __name__ == '__main__':
+    # This block is for development use (python app.py) and is NOT run by Gunicorn.
     app.run(debug=True)

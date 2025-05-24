@@ -5,3 +5,4 @@ Flask-Login
 requests
 Werkzeug
 Flask-Admin==1.6.1
+gunicorn

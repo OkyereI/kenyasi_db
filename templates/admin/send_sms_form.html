@@ -1,0 +1,42 @@
+{% extends admin_base_template %}
+
+{% block body %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+            <h1>Send SMS to {{ member.first_name }} {{ member.last_name }}</h1>
+            <p class="lead">
+                Sending message to contact: <strong>{{ member.contact_number if member.contact_number else 'N/A' }}</strong><br>
+                Verification Code for this member: <strong>{{ member.verification_code }}</strong>
+            </p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <ul class="list-unstyled">
+                        {% for category, message in messages %}
+                            <li class="alert alert-{{ category }}">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+
+            {% if member.contact_number %}
+                <form method="POST" action="{{ url_for('communitymember.send_sms_view', member_id=member.id) }}"> {# UPDATED URL #}
+                    <div class="form-group">
+                        <label for="message">Message:</label>
+                        <textarea class="form-control" id="message" name="message" rows="5" required
+                                  placeholder="Your message here. The verification code will be prepended automatically.">{{ message_text }}</textarea>
+                        <p class="help-block">Max 1600 characters.</p>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send SMS</button>
+                    <a href="{{ url_for('communitymember.index_view') }}" class="btn btn-default">Cancel</a>
+                </form>
+            {% else %}
+                <div class="alert alert-warning">
+                    This member does not have a contact number. Cannot send SMS.
+                </div>
+                <a href="{{ url_for('communitymember.index_view') }}" class="btn btn-default">Back to Members</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

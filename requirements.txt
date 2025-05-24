@@ -1,0 +1,7 @@
+Flask
+Flask-SQLAlchemy
+Flask-WTF
+Flask-Login
+requests
+Werkzeug
+Flask-Admin==1.6.1

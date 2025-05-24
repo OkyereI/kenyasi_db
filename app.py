@@ -4,14 +4,15 @@ import os
 import random
 import string
 import requests
-from datetime import datetime, date
+from datetime import datetime, date # Import 'date' as well
 
 from flask import Flask, redirect, url_for, flash, request, render_template, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, TextAreaField, IntegerField, BooleanField, SubmitField, PasswordField
+# Import DateField here
+from wtforms import StringField, SelectField, TextAreaField, IntegerField, BooleanField, SubmitField, PasswordField, DateField 
 from wtforms.validators import DataRequired, Length, Optional, Regexp, Email, ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -64,7 +65,7 @@ class CommunityMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(100), nullable=False)
     last_name = db.Column(db.String(100), nullable=False)
-    date_of_birth = db.Column(db.Date, nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=False) # Stored as a Date object
     gender = db.Column(db.String(10), nullable=False)
     contact_number = db.Column(db.String(20), nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=True)
@@ -93,45 +94,79 @@ def generate_verification_code(area_code: str) -> str:
     random_suffix = ''.join(random.choice(characters) for _ in range(remaining_length))
     return f"{base_string}{random_suffix}"
 
-# --- SMS Sending Function (Modified to prepend verification code) ---
+# --- SMS Sending Function (Corrected with GET and debug print) ---
+# app.py (locate this function and replace it)
+
+# --- SMS Sending Function (Modified to capture Arkesel's detailed error) ---
 def send_sms(recipient: str, message: str, prepend_code: bool = False, verification_code: str = "") -> bool:
+    print("DEBUG: Entering send_sms function. Using GET request logic.") # Debug print
+
     api_key = app.config['ARKESEL_API_KEY']
     sender_id = app.config['ARKESEL_SENDER_ID']
-    url = "https://sms.arkesel.com/sms/api"
+    # url = "https://sms.arkesel.com/sms/api"
+    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessage"
 
-    # Basic phone number formatting for Ghana numbers
-    if recipient and not recipient.startswith('+'):
-        # Strip leading '0' if present, then prepend '+233'
+    # Robust phone number formatting to ensure +233 format
+    if recipient: # Ensure recipient is not empty or None
+        recipient = recipient.strip() # Remove any leading/trailing whitespace
+        
+        # Remove any existing '+' to handle it consistently
+        if recipient.startswith('+'):
+            recipient = recipient.lstrip('+') 
+        
+        # If it starts with '0', remove '0' and prepend '233'
         if recipient.startswith('0'):
-            recipient = '233' + recipient.lstrip('0')
-        else:
-            recipient = '233' + recipient # Assume it's already without leading 0 for simplicity
+            recipient = '233' + recipient[1:] 
+        # If it doesn't start with '233' (e.g., 24xxxxxxx), prepend '233'
+        elif not recipient.startswith('233'):
+            recipient = '233' + recipient
+        
+        # Now, ensure the final number has the '+' prefix for Arkesel's preference
+        recipient = '+' + recipient
+    else:
+        app.logger.warning("Attempted to send SMS to an empty recipient number.")
+        return False # Cannot send if recipient number is empty
 
-    final_message = f"{verification_code} {message}" if prepend_code else message
+    final_message = f"{verification_code} {message}" if prepend_code else message 
     
+    # Payload for Arkesel GET API
     payload = {
+        "action": "send-sms",      # Explicit action for Arkesel
         "api_key": api_key,
-        "sender_id": sender_id,
-        "phone_number": recipient,
+        "to": recipient,           # Recipient key for GET API
+        "from": sender_id,         # Sender ID key for GET API
         "message": final_message
     }
 
     try:
-        app.logger.info(f"Attempting to send SMS to {recipient} with message: '{final_message}'")
-        response = requests.post(url, data=payload)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        app.logger.info(f"Attempting to send SMS to {recipient} with message: '{final_message}' using GET request.")
+        response = requests.get(url, params=payload) 
         
+        # --- NEW DEBUGGING: Log Arkesel's exact response content if not success ---
+        if not response.ok: # If status code is not 2xx (successful)
+            app.logger.error(f"Arkesel API returned non-success status {response.status_code}.")
+            app.logger.error(f"Arkesel Raw Response Text: {response.text}")
+            try:
+                error_data = response.json()
+                app.logger.error(f"Arkesel Parsed Error JSON: {error_data}")
+            except requests.exceptions.JSONDecodeError:
+                app.logger.error("Arkesel response could not be parsed as JSON.")
+            # Do NOT raise_for_status here if we want to handle it below based on response.json()
+            # We'll just return False after logging the detailed error
+            return False # Immediately return False if HTTP status indicates failure
+
+        # If response.ok (status code 2xx), proceed to parse JSON
         response_data = response.json()
         if response_data.get('status') == 'success':
             app.logger.info(f"SMS sent successfully to {recipient}. Arkesel response: {response_data}")
             return True
         else:
-            app.logger.error(f"Failed to send SMS to {recipient}. Arkesel error: {response_data}")
+            # This handles cases where Arkesel returns 200 OK but status is 'failed' in JSON
+            app.logger.error(f"Failed to send SMS to {recipient}. Arkesel JSON status not 'success': {response_data}")
             return False
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error sending SMS to {recipient}: {e}")
         return False
-
 # --- Flask-Admin Customization ---
 
 # Custom Admin Index View to display statistics
@@ -175,17 +210,15 @@ class MyAdminIndexView(AdminIndexView):
 class CommunityMemberForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=100)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=100)])
-    date_of_birth = StringField('Date of Birth (YYYY-MM-DD)', validators=[
-        DataRequired(), 
-        Regexp(r'^\d{4}-\d{2}-\d{2}$', message="Date format must beYYYY-MM-DD (e.g., 2000-01-31)")
-    ])
+    # CHANGED: Use DateField for date_of_birth
+    date_of_birth = DateField('Date of Birth (YYYY-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
     gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')], validators=[DataRequired()])
     contact_number = StringField('Contact Number', validators=[Optional(), Length(max=20)])
     email = StringField('Email', validators=[Optional(), Email(), Length(max=120)])
     address = TextAreaField('Address', validators=[Optional()])
     employment_status = SelectField('Employment Status', choices=[
         ('Employed', 'Employed'), ('Unemployed', 'Unemployed'),
-        ('Student', 'Student'), ('Retired', 'Retired'),('Self Employed','Self Employed'), ('Other', 'Other')
+        ('Student', 'Student'), ('Retired', 'Retired'), ('Other', 'Other')
     ], validators=[Optional()])
     occupation = StringField('Occupation', validators=[Optional(), Length(max=100)])
     employer = StringField('Employer', validators=[Optional(), Length(max=100)])
@@ -196,7 +229,7 @@ class CommunityMemberForm(FlaskForm):
     submit = SubmitField('Submit')
 
 # Form for Send All Messages
-class SendAllMessagesForm(FlaskForm): # This form is now within app.py
+class SendAllMessagesForm(FlaskForm):
     message = TextAreaField('Message to All Members', validators=[DataRequired(), Length(min=10, max=1600)],
                             render_kw={"placeholder": "Your message here. Verification code will be prepended automatically."})
     submit = SubmitField('Send Message to All')
@@ -225,16 +258,12 @@ class CommunityMemberView(ModelView):
 
     form = CommunityMemberForm
 
-    # --- USING CUSTOM TEMPLATE FOR ACTIONS (FALLBACK SOLUTION) ---
     list_template = 'admin/community_member_list.html'
-    # REMOVED column_extra_actions as it's handled by list_template now.
 
     def create_model(self, form):
         try:
             model = self.model()
             form.populate_obj(model)
-            if form.date_of_birth.data:
-                model.date_of_birth = datetime.strptime(form.date_of_birth.data, '%Y-%m-%d').date()
             model.verification_code = generate_verification_code(model.area_code)
             self.session.add(model)
             self._on_model_change(form, model, True)
@@ -251,8 +280,6 @@ class CommunityMemberView(ModelView):
         try:
             old_area_code = model.area_code
             form.populate_obj(model)
-            if form.date_of_birth.data:
-                model.date_of_birth = datetime.strptime(form.date_of_birth.data, '%Y-%m-%d').date()
             if old_area_code != model.area_code:
                 model.verification_code = generate_verification_code(model.area_code)
             self._on_model_change(form, model, False)
@@ -265,10 +292,10 @@ class CommunityMemberView(ModelView):
             app.logger.error(f"Error updating community member: {ex}")
             return False
 
-    # --- NEW: Exposed Method for Individual SMS Sending ---
+    # --- Exposed Method for Individual SMS Sending ---
     @expose('/send-sms/<int:member_id>', methods=['GET', 'POST'])
     @login_required
-    def send_sms_view(self, member_id): # Renamed to avoid conflict with function name
+    def send_sms_view(self, member_id):
         member = db.session.get(CommunityMember, member_id)
         if not member:
             flash('Community member not found.', 'danger')
@@ -278,7 +305,6 @@ class CommunityMemberView(ModelView):
             message = request.form.get('message')
             if not message:
                 flash('SMS message cannot be empty.', 'danger')
-                # Use self.render here to ensure admin context
                 return self.render('admin/send_sms_form.html', member=member, message_text="") 
 
             if member.contact_number:
@@ -291,13 +317,12 @@ class CommunityMemberView(ModelView):
             
             return redirect(url_for('communitymember.index_view')) 
 
-        # Use self.render here to ensure admin context
         return self.render('admin/send_sms_form.html', member=member, message_text="")
 
-    # --- NEW: Exposed Method for Send All Messages ---
+    # --- Exposed Method for Send All Messages ---
     @expose('/send-all-sms/', methods=['GET', 'POST'])
     @login_required
-    def send_all_sms_view(self): # Renamed to avoid conflict with function name
+    def send_all_sms_view(self):
         form = SendAllMessagesForm()
         if form.validate_on_submit():
             message = form.message.data
@@ -317,9 +342,8 @@ class CommunityMemberView(ModelView):
                     no_contact_count += 1
             
             flash(f'Bulk SMS operation completed: {sent_count} sent, {failed_count} failed, {no_contact_count} members had no contact number.', 'info')
-            return redirect(url_for('admin.index')) # Redirect back to dashboard
+            return redirect(url_for('admin.index')) 
 
-        # Use self.render here to ensure admin context
         return self.render('admin/send_all_sms_form.html', form=form)
 
 
@@ -375,8 +399,6 @@ def print_member_info(member_id):
         flash('Community member not found.', 'danger')
         return redirect(url_for('communitymember.index_view'))
     
-    # This route's template ('admin/print_member.html') does NOT extend admin_base_template,
-    # so it does not need to be an exposed method or pass admin_base_template.
     return render_template('admin/print_member.html', member=member, print_on_load=True)
 
 

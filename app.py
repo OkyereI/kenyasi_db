@@ -100,7 +100,7 @@ def send_sms(recipient: str, message: str, prepend_code: bool = False, verificat
     api_key = app.config['ARKESEL_API_KEY']
     sender_id = app.config['ARKESEL_SENDER_ID']
     # url = "https://sms.arkesel.com/sms/api"
-    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessages"
+    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessage"
     # Robust phone number formatting to ensure +233 format
     if recipient: 
         recipient = recipient.strip() 

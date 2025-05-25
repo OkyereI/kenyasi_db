@@ -1,4 +1,4 @@
-# app.py
+# app.py (complete file)
 
 import os
 import random
@@ -93,15 +93,14 @@ def generate_verification_code(area_code: str) -> str:
     random_suffix = ''.join(random.choice(characters) for _ in range(remaining_length))
     return f"{base_string}{random_suffix}"
 
-# --- SMS Sending Function ---
-def send_sms(recipient: str, message: str, prepend_code: bool = False, verification_code: str = "") -> bool:
+# --- SMS Sending Function (UPDATED for multi-line format) ---
+def send_sms(recipient: str, message: str, verification_code: str = "", first_name: str = "", last_name: str = "") -> bool:
     print("DEBUG: Entering send_sms function. Using GET request logic.") 
 
     api_key = app.config['ARKESEL_API_KEY']
     sender_id = app.config['ARKESEL_SENDER_ID']
-    # url = "https://sms.arkesel.com/sms/api"
-    url = "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessage"
-    # Robust phone number formatting to ensure +233 format
+    url = "https://sms.arkesel.com/sms/api"
+
     if recipient: 
         recipient = recipient.strip() 
         if recipient.startswith('+'):
@@ -115,22 +114,47 @@ def send_sms(recipient: str, message: str, prepend_code: bool = False, verificat
         app.logger.warning("Attempted to send SMS to an empty recipient number.")
         return False 
 
-    final_message = f"{verification_code} {message}" if prepend_code else message 
+    # Construct the final message in the exact multi-line format requested
+    final_message_parts = []
+    
+    # 1. Verification Code line
+    if verification_code:
+        final_message_parts.append(f"Verification code: {verification_code}")
+
+    # 2. Name line
+    full_name = f"{first_name} {last_name}".strip()
+    if full_name:
+        final_message_parts.append(f"Name: {full_name}")
+
+    # 3. Separator line (only if there's header content AND a message body)
+    if (verification_code or full_name) and message.strip():
+        final_message_parts.append(".....................................")
+    
+    # 4. Admin message body
+    if message.strip():
+        final_message_parts.append(message.strip()) 
+
+    # 5. Fixed footer
+    final_message_parts.append("From: Kenyasi N1 Youth association")
+
+    # Join all parts with newlines
+    final_message = "\n".join(final_message_parts)
+
     
     payload = {
         "action": "send-sms",      
         "api_key": api_key,
         "to": recipient,           
         "from": sender_id,         
-        "message": final_message
+        "sms": final_message # Corrected: 'message' to 'sms'
     }
 
     try:
-        app.logger.info(f"Attempting to send SMS to {recipient} with message: '{final_message}' using GET request.")
+        app.logger.info(f"Attempting to send SMS to {recipient} with message: \n'{final_message}'\n using GET request.") # Added newlines for clearer logging
         response = requests.get(url, params=payload) 
         
         if not response.ok: 
-            app.logger.error(f"Arkesel API returned non-success status {response.status_code}.")
+            app.logger.error(f"Arkesel API returned non-success HTTP status {response.status_code}.") 
             app.logger.error(f"Arkesel Raw Response Text: {response.text}")
             try:
                 error_data = response.json()
@@ -140,11 +164,13 @@ def send_sms(recipient: str, message: str, prepend_code: bool = False, verificat
             return False 
 
         response_data = response.json()
-        if response_data.get('status') == 'success':
+        if response_data.get('code') == 'ok': 
             app.logger.info(f"SMS sent successfully to {recipient}. Arkesel response: {response_data}")
             return True
         else:
-            app.logger.error(f"Failed to send SMS to {recipient}. Arkesel JSON status not 'success': {response_data}")
+            error_code = response_data.get('code', 'N/A')
+            error_message = response_data.get('message', 'No specific message from Arkesel.')
+            app.logger.error(f"Failed to send SMS to {recipient}. Arkesel API responded with code: '{error_code}', message: '{error_message}'. Full response: {response_data}")
             return False
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error sending SMS to {recipient}: {e}")
@@ -207,9 +233,10 @@ class CommunityMemberForm(FlaskForm):
     area_code = StringField('Area Code', validators=[DataRequired(), Length(min=1, max=10, message="Area Code is required and should be max 10 characters")])
     submit = SubmitField('Submit')
 
+# UPDATED: Placeholder text reflects new multi-line format
 class SendAllMessagesForm(FlaskForm):
     message = TextAreaField('Message to All Members', validators=[DataRequired(), Length(min=10, max=1600)],
-                            render_kw={"placeholder": "Your message here. Verification code will be prepended automatically."})
+                            render_kw={"placeholder": "Enter your message here. The system will automatically add the member's Verification Code and Name as a header, and 'From: Kenyasi N1 Youth association' as a footer."})
     submit = SubmitField('Send Message to All')
 
 class CommunityMemberView(ModelView):
@@ -268,6 +295,7 @@ class CommunityMemberView(ModelView):
             app.logger.error(f"Error updating community member: {ex}")
             return False
 
+    # Call to send_sms now passes first_name and last_name
     @expose('/send-sms/<int:member_id>', methods=['GET', 'POST'])
     @login_required
     def send_sms_view(self, member_id):
@@ -283,7 +311,10 @@ class CommunityMemberView(ModelView):
                 return self.render('admin/send_sms_form.html', member=member, message_text="") 
 
             if member.contact_number:
-                if send_sms(member.contact_number, message, prepend_code=True, verification_code=member.verification_code):
+                if send_sms(member.contact_number, message, 
+                            verification_code=member.verification_code, 
+                            first_name=member.first_name, 
+                            last_name=member.last_name):
                     flash(f'SMS sent to {member.first_name} {member.last_name} ({member.contact_number})', 'success')
                 else:
                     flash(f'Failed to send SMS to {member.first_name} {member.last_name}. Check logs for details.', 'danger')
@@ -294,6 +325,7 @@ class CommunityMemberView(ModelView):
 
         return self.render('admin/send_sms_form.html', member=member, message_text="")
 
+    # Call to send_sms now passes first_name and last_name
     @expose('/send-all-sms/', methods=['GET', 'POST'])
     @login_required
     def send_all_sms_view(self):
@@ -308,7 +340,10 @@ class CommunityMemberView(ModelView):
 
             for member in all_members:
                 if member.contact_number:
-                    if send_sms(member.contact_number, message, prepend_code=True, verification_code=member.verification_code):
+                    if send_sms(member.contact_number, message, 
+                                verification_code=member.verification_code, 
+                                first_name=member.first_name, 
+                                last_name=member.last_name):
                         sent_count += 1
                     else:
                         failed_count += 1
@@ -375,7 +410,7 @@ def print_member_info(member_id):
     return render_template('admin/print_member.html', member=member, print_on_load=True)
 
 
-# --- Flask CLI Commands for Database Management (NEW SECTION) ---
+# --- Flask CLI Commands for Database Management ---
 @app.cli.command("init-db")
 def init_db_command():
     """Clear existing data and create new tables, then add admin user."""

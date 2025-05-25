@@ -1,40 +1,30 @@
-{% extends admin_base_template %}
+{% extends 'admin/master.html' %}
 
 {% block body %}
-<div class="container">
+  <div class="container">
     <div class="row">
-        <div class="col-md-8 col-md-offset-2">
-            <h1>Send Message to All Community Members</h1>
-            <p class="lead">
-                This message will be sent to all registered community members with a contact number.
-                Each message will be prefixed with the member's unique verification code.
-            </p>
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    <ul class="list-unstyled">
-                        {% for category, message in messages %}
-                            <li class="alert alert-{{ category }}">{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            {% endwith %}
+      <div class="col-md-8 col-md-offset-2">
+        <h2 class="text-center">Send Bulk SMS to All Members</h2>
+        <p class="text-center">This message will be sent to all members with a contact number.</p>
 
-            <form method="POST" action="{{ url_for('communitymember.send_all_sms_view') }}"> {# UPDATED URL #}
-                {{ form.hidden_tag() }} {# CSRF token #}
-                <div class="form-group">
-                    {{ form.message.label }}
-                    {{ form.message(class_="form-control") }}
-                    {% for error in form.message.errors %}
-                        <span class="text-danger">{{ error }}</span>
-                    {% endfor %}
-                </div>
-                <div class="form-group">
-                    <p class="help-block">Max 1600 characters. Each message will start with "Verification Code: [CODE] Your Message..."</p>
-                </div>
-                {{ form.submit(class_="btn btn-primary btn-lg") }}
-                <a href="{{ url_for('admin.index') }}" class="btn btn-default btn-lg">Cancel</a>
-            </form>
-        </div>
+        <form method="POST">
+          {{ form.csrf_token }}
+          <div class="form-group">
+            {{ form.message.label(class="control-label") }}
+            {{ form.message(class="form-control", rows="8", placeholder="Enter your message here. This will be the main body. The system will automatically add the member's Verification Code and Name as a header, and 'From: Kenyasi N1 Youth association' as a footer.") }}
+            {% if form.message.errors %}
+              <ul class="errors">
+                {% for error in form.message.errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            <small class="form-text text-muted">Max 1600 characters.</small>
+          </div>
+          <button type="submit" class="btn btn-primary">Send Messages</button>
+          <a href="{{ url_for('admin.index') }}" class="btn btn-default">Cancel</a>
+        </form>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}

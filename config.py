@@ -12,4 +12,4 @@ class Config:
 
     # Arkesel SMS API Configuration
     ARKESEL_API_KEY = os.environ.get('ARKESEL_API_KEY') or 'b0FrYkNNVlZGSmdrendVT3hwUHk'
-    ARKESEL_SENDER_ID = 'KenyasiN1YA' # Or your registered sender ID
+    ARKESEL_SENDER_ID = 'K1YouthAss' # Or your registered sender ID

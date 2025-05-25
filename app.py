@@ -1,4 +1,4 @@
-# app.py (complete file)
+# app.py
 
 import os
 import random
@@ -93,14 +93,16 @@ def generate_verification_code(area_code: str) -> str:
     random_suffix = ''.join(random.choice(characters) for _ in range(remaining_length))
     return f"{base_string}{random_suffix}"
 
-# --- SMS Sending Function (UPDATED for multi-line format) ---
+# --- SMS Sending Function (UPDATED) ---
+# Added first_name and last_name parameters, removed prepend_code
 def send_sms(recipient: str, message: str, verification_code: str = "", first_name: str = "", last_name: str = "") -> bool:
     print("DEBUG: Entering send_sms function. Using GET request logic.") 
 
     api_key = app.config['ARKESEL_API_KEY']
     sender_id = app.config['ARKESEL_SENDER_ID']
-    url = "https://sms.arkesel.com/sms/api"
-
+    # url = "https://sms.arkesel.com/sms/api"
+    url =   "https://sms.arkesel.com/sms/api?action=send-sms&api_key=b0FrYkNNVlZGSmdrendVT3hwUHk&to=PhoneNumber&from=SenderID&sms=YourMessage"
+    # Robust phone number formatting to ensure +233 format
     if recipient: 
         recipient = recipient.strip() 
         if recipient.startswith('+'):
@@ -114,31 +116,15 @@ def send_sms(recipient: str, message: str, verification_code: str = "", first_na
         app.logger.warning("Attempted to send SMS to an empty recipient number.")
         return False 
 
-    # Construct the final message in the exact multi-line format requested
-    final_message_parts = []
-    
-    # 1. Verification Code line
-    if verification_code:
-        final_message_parts.append(f"Verification code: {verification_code}")
-
-    # 2. Name line
+    # Construct the final message as per new requirement: [VerificationCode] [Full Name] [Admin Message]
+    # Handle cases where first_name or last_name might be missing, though they are nullable=False now.
     full_name = f"{first_name} {last_name}".strip()
-    if full_name:
-        final_message_parts.append(f"Name: {full_name}")
-
-    # 3. Separator line (only if there's header content AND a message body)
-    if (verification_code or full_name) and message.strip():
-        final_message_parts.append(".....................................")
-    
-    # 4. Admin message body
-    if message.strip():
-        final_message_parts.append(message.strip()) 
-
-    # 5. Fixed footer
-    final_message_parts.append("From: Kenyasi N1 Youth association")
-
-    # Join all parts with newlines
-    final_message = "\n".join(final_message_parts)
+    if full_name and verification_code:
+        final_message = f"{verification_code} {full_name} {message}"
+    elif verification_code: # Fallback if for some reason name is missing
+        final_message = f"{verification_code} {message}"
+    else: # Fallback if both are missing
+        final_message = message
 
     
     payload = {
@@ -146,11 +132,11 @@ def send_sms(recipient: str, message: str, verification_code: str = "", first_na
         "api_key": api_key,
         "to": recipient,           
         "from": sender_id,         
-        "sms": final_message # Corrected: 'message' to 'sms'
+        "message": final_message
     }
 
     try:
-        app.logger.info(f"Attempting to send SMS to {recipient} with message: \n'{final_message}'\n using GET request.") # Added newlines for clearer logging
+        app.logger.info(f"Attempting to send SMS to {recipient} with message: '{final_message}' using GET request.")
         response = requests.get(url, params=payload) 
         
         if not response.ok: 
@@ -233,10 +219,10 @@ class CommunityMemberForm(FlaskForm):
     area_code = StringField('Area Code', validators=[DataRequired(), Length(min=1, max=10, message="Area Code is required and should be max 10 characters")])
     submit = SubmitField('Submit')
 
-# UPDATED: Placeholder text reflects new multi-line format
+# UPDATED: Placeholder text for admin's understanding of the message format
 class SendAllMessagesForm(FlaskForm):
     message = TextAreaField('Message to All Members', validators=[DataRequired(), Length(min=10, max=1600)],
-                            render_kw={"placeholder": "Enter your message here. The system will automatically add the member's Verification Code and Name as a header, and 'From: Kenyasi N1 Youth association' as a footer."})
+                            render_kw={"placeholder": "Enter your message here. The SMS will be formatted as: [Verification Code] [Full Name] [Your Message]"})
     submit = SubmitField('Send Message to All')
 
 class CommunityMemberView(ModelView):
@@ -295,7 +281,7 @@ class CommunityMemberView(ModelView):
             app.logger.error(f"Error updating community member: {ex}")
             return False
 
-    # Call to send_sms now passes first_name and last_name
+    # UPDATED: Call to send_sms now passes first_name and last_name
     @expose('/send-sms/<int:member_id>', methods=['GET', 'POST'])
     @login_required
     def send_sms_view(self, member_id):
@@ -311,6 +297,7 @@ class CommunityMemberView(ModelView):
                 return self.render('admin/send_sms_form.html', member=member, message_text="") 
 
             if member.contact_number:
+                # Removed prepend_code, added first_name and last_name
                 if send_sms(member.contact_number, message, 
                             verification_code=member.verification_code, 
                             first_name=member.first_name, 
@@ -325,7 +312,7 @@ class CommunityMemberView(ModelView):
 
         return self.render('admin/send_sms_form.html', member=member, message_text="")
 
-    # Call to send_sms now passes first_name and last_name
+    # UPDATED: Call to send_sms now passes first_name and last_name
     @expose('/send-all-sms/', methods=['GET', 'POST'])
     @login_required
     def send_all_sms_view(self):
@@ -340,6 +327,7 @@ class CommunityMemberView(ModelView):
 
             for member in all_members:
                 if member.contact_number:
+                    # Removed prepend_code, added first_name and last_name
                     if send_sms(member.contact_number, message, 
                                 verification_code=member.verification_code, 
                                 first_name=member.first_name, 

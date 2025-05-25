@@ -3,82 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Community App Admin</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
     <style>
         body {
-            background-color: #f5f5f5;
-            padding-top: 40px;
-            padding-bottom: 40px;
+            background-color: #f8f9fa;
         }
-        .form-signin {
-            max-width: 330px;
-            padding: 15px;
-            margin: 0 auto;
-            background-color: #fff;
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .form-signin .form-signin-heading,
-        .form-signin .checkbox {
-            margin-bottom: 10px;
-        }
-        .form-signin .checkbox {
-            font-weight: normal;
-        }
-        .form-signin .form-control {
-            position: relative;
-            height: auto;
-            -webkit-box-sizing: border-box;
-               -moz-box-sizing: border-box;
-                    box-sizing: border-box;
-            padding: 10px;
-            font-size: 16px;
-        }
-        .form-signin .form-control:focus {
-            z-index: 2;
-        }
-        .form-signin input[type="text"] {
-            margin-bottom: -1px;
-            border-bottom-left-radius: 0;
-            border-bottom-right-radius: 0;
-        }
-        .form-signin input[type="password"] {
-            margin-bottom: 10px;
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #ffffff;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <form class="form-signin" method="POST" action="{{ url_for('login') }}">
-            {{ form.hidden_tag() }}
-            <h2 class="form-signin-heading text-center">Admin Login</h2>
-
+        <div class="login-container">
+            <h2 class="text-center">Admin Login</h2>
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                    <ul class="list-unstyled">
-                        {% for category, message in messages %}
-                            <li class="alert alert-{{ category }}">{{ message }}</li>
-                        {% endfor %}
-                    </ul>
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
                 {% endif %}
             {% endwith %}
-
-            <label for="username" class="sr-only">Username</label>
-            {{ form.username(class_="form-control", placeholder="Username", required=True, autofocus=True) }}
-
-            <label for="password" class="sr-only">Password</label>
-            {{ form.password(class_="form-control", placeholder="Password", required=True) }}
-
-            <div class="checkbox">
-                <label>
-                    {{ form.remember_me() }} Remember me
-                </label>
-            </div>
-            {{ form.submit(class_="btn btn-lg btn-primary btn-block") }}
-        </form>
+            <form method="POST">
+                {{ form.csrf_token }} {# Flask-WTF handles CSRF token for security #}
+                
+                {# REMOVED USERNAME FIELD #}
+                {#
+                <div class="form-group">
+                    {{ form.username.label(class="control-label") }}
+                    {{ form.username(class="form-control", placeholder="Enter username") }}
+                    {% if form.username.errors %}
+                        <ul class="errors">
+                            {% for error in form.username.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                #}
+                
+                <div class="form-group">
+                    {{ form.password.label(class="control-label") }}
+                    {{ form.password(class="form-control", placeholder="Enter password") }}
+                    {% if form.password.errors %}
+                        <ul class="errors">
+                            {% for error in form.password.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                <div class="form-group form-check">
+                    {{ form.remember_me(class="form-check-input") }}
+                    {{ form.remember_me.label(class="form-check-label") }}
+                </div>
+                {{ form.submit(class="btn btn-primary btn-block") }}
+            </form>
+        </div>
     </div>
 </body>
 </html>

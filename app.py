@@ -375,21 +375,37 @@ def print_member_info(member_id):
     return render_template('admin/print_member.html', member=member, print_on_load=True)
 
 
-# --- DATABASE INITIALIZATION FOR GUNICORN/PRODUCTION ---
-# This block ensures tables are created and the initial admin user is set up
-# when the 'app' object is created/imported by Gunicorn.
-with app.app_context():
-    db.create_all()
+# --- Flask CLI Commands for Database Management (NEW SECTION) ---
+@app.cli.command("init-db")
+def init_db_command():
+    """Clear existing data and create new tables, then add admin user."""
+    print("Attempting to initialize database...")
+    with app.app_context():
+        # Optional: uncomment db.drop_all() if you want to completely reset the database
+        # db.drop_all() 
+        db.create_all()
 
-    if not db.session.query(User).filter_by(username='admin').first():
-        admin_user = User(username='admin')
-        admin_user.set_password('KSYA2025') # Default password for admin
-        db.session.add(admin_user)
-        db.session.commit()
-        app.logger.info("Initial admin user 'admin' created with password 'KSYA2025'")
-        print("Initial admin user 'admin' created with password 'KSYA2025'")
+        if not db.session.query(User).filter_by(username='admin').first():
+            admin_user = User(username='admin')
+            admin_user.set_password('KSYA2025') # Default password for admin
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Database initialized: Tables created and admin user 'admin' (password 'KSYA2025') created.")
+        else:
+            print("Database tables created. Admin user 'admin' already exists (not created again).")
+    print("Database initialization complete.")
 
 
 if __name__ == '__main__':
     # This block is for development use (python app.py) and is NOT run by Gunicorn.
+    # For development, we can still have it create tables automatically if needed.
+    with app.app_context():
+        db.create_all() # Ensure tables exist for dev
+        if not db.session.query(User).filter_by(username='admin').first():
+            admin_user = User(username='admin')
+            admin_user.set_password('KSYA2025') # Default password for admin
+            db.session.add(admin_user)
+            db.session.commit()
+            app.logger.info("Initial admin user 'admin' created with password 'KSYA2025'")
+            print("Initial admin user 'admin' created with password 'KSYA2025'")
     app.run(debug=True)
